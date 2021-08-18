@@ -214,6 +214,10 @@ public abstract class RebalanceImpl {
         }
     }
 
+    /**
+     * 该方法是实现Consumer端负载均衡的核心
+     * @param isOrder
+     */
     public void doRebalance(final boolean isOrder) {
         Map<String, SubscriptionData> subTable = this.getSubscriptionInner();
         if (subTable != null) {
@@ -236,6 +240,12 @@ public abstract class RebalanceImpl {
         return subscriptionInner;
     }
 
+    /**
+     * rebalanceByTopic()方法根据消费者通信类型为“广播模式”还是“集群模式”做不同的逻辑处理
+     *
+     * @param topic
+     * @param isOrder
+     */
     private void rebalanceByTopic(final String topic, final boolean isOrder) {
         switch (messageModel) {
             case BROADCASTING: {
@@ -271,18 +281,24 @@ public abstract class RebalanceImpl {
                 if (mqSet != null && cidAll != null) {
                     List<MessageQueue> mqAll = new ArrayList<MessageQueue>();
                     mqAll.addAll(mqSet);
-
+                    // 对MQ进行排序
                     Collections.sort(mqAll);
+                    // 对消费者ID进行排序
                     Collections.sort(cidAll);
 
                     AllocateMessageQueueStrategy strategy = this.allocateMessageQueueStrategy;
 
                     List<MessageQueue> allocateResult = null;
                     try {
+                        // 计算当前消费者应该分配的MQ集合
                         allocateResult = strategy.allocate(
+                                // 当前消费者所属的消费组
                             this.consumerGroup,
+                                // 当前消费者ID
                             this.mQClientFactory.getClientId(),
+                                // MQ集合
                             mqAll,
+                                // 消费组中消费者ID集合
                             cidAll);
                     } catch (Throwable e) {
                         log.error("AllocateMessageQueueStrategy.allocate Exception. allocateMessageQueueStrategyName={}", strategy.getName(),

@@ -26,16 +26,19 @@ import org.apache.rocketmq.common.filter.ExpressionType;
 import java.util.HashSet;
 import java.util.Set;
 
+/**
+ * 参考链接：https://fdx321.github.io/2017/08/23/%E3%80%90RocketMQ%E6%BA%90%E7%A0%81%E5%AD%A6%E4%B9%A0%E3%80%917-%E6%B6%88%E6%81%AF%E8%BF%87%E6%BB%A4/
+ */
 public class SubscriptionData implements Comparable<SubscriptionData> {
     public final static String SUB_ALL = "*";
     private boolean classFilterMode = false;
     private String topic;
-    private String subString;
-    private Set<String> tagsSet = new HashSet<String>();
-    private Set<Integer> codeSet = new HashSet<Integer>();
+    private String subString;//就是上面样例的 AAA||BBB
+    private Set<String> tagsSet = new HashSet<String>();// AAA和BBB
+    private Set<Integer> codeSet = new HashSet<Integer>();//hash(AAA)和hash(BBB)
     private long subVersion = System.currentTimeMillis();
-    private String expressionType = ExpressionType.TAG;
-
+    private String expressionType = ExpressionType.TAG;//TAG或SQL92, 这里是TAG
+    // 下面这两个是 Consumer 端过滤相关的，后面再讨论
     @JSONField(serialize = false)
     private String filterClassSource;
 

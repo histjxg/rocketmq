@@ -42,20 +42,28 @@ import org.apache.rocketmq.store.util.LibC;
 import sun.nio.ch.DirectBuffer;
 
 public class MappedFile extends ReferenceResource {
+    //：操作系统每页大小，默认 4k
     public static final int OS_PAGE_SIZE = 1024 * 4;
     protected static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
-
+    //当前jvm实例中mappedFile的虚拟内存
     private static final AtomicLong TOTAL_MAPPED_VIRTUAL_MEMORY = new AtomicLong(0);
-
+    //当前 JVM 实例中 MappedFile 对象个数
     private static final AtomicInteger TOTAL_MAPPED_FILES = new AtomicInteger(0);
+    //当前该文件的写指针，从0开始（内存映射文件中的写指针）
     protected final AtomicInteger wrotePosition = new AtomicInteger(0);
+    //当前文件的提交指针，如果开启 transientStore-PoolEnable 则数据会存储在 TransientStorePool 中， 然后提交到内存映射 ByteBuffer 中,再刷写到磁盘
     protected final AtomicInteger committedPosition = new AtomicInteger(0);
+    //刷写到磁盘指针，该指针之前的数据持久化到磁盘中
     private final AtomicInteger flushedPosition = new AtomicInteger(0);
+    //文件大小
     protected int fileSize;
+    //文件通道
     protected FileChannel fileChannel;
     /**
      * Message will put to here first, and then reput to FileChannel if writeBuffer is not null.
      */
+    //：堆内存 ByteBuffer 如果不为空,数据首先存储在
+    //Buffer 中， 然后提交到 appedFile 对应的内存映射文件 Buffer。transientStorePoolEnable为true 不为空
     protected ByteBuffer writeBuffer = null;
     protected TransientStorePool transientStorePool = null;
     private String fileName;
@@ -196,6 +204,13 @@ public class MappedFile extends ReferenceResource {
         return appendMessagesInner(messageExtBatch, cb);
     }
 
+    /**
+     * 5.将消息追加到MappedFile中， 首先先获取 MappedFile 当前写指针，如果currentPos 大于或等于文件大小则 明文件已写满，抛出 AppendMessageStatus. UNKNOWN_ERROR
+     *                         如果 currentPos 小于文件大小，通过 slice （）方法创建一个与 MappedFile 的共享内存区，并设置 position 为当前指针
+     * @param messageExt
+     * @param cb
+     * @return
+     */
     public AppendMessageResult appendMessagesInner(final MessageExt messageExt, final AppendMessageCallback cb) {
         assert messageExt != null;
         assert cb != null;
@@ -294,6 +309,13 @@ public class MappedFile extends ReferenceResource {
         return this.getFlushedPosition();
     }
 
+    /**
+     * 执行提交操作， commitLeastPages 为本次提交最小的页数，如果待提交数据不满
+     * commitLeastPages ，则不执行本次提交操作，待下次提交 writeBuff1 如果为空，直接返回
+     * wrotePosition 指针 ，无须执行 commit 操作， commit 操作主体 writeBuffer
+     * @param commitLeastPages
+     * @return
+     */
     public int commit(final int commitLeastPages) {
         if (writeBuffer == null) {
             //no need to commit data to file channel, so just regard wrotePosition as committedPosition.
@@ -350,6 +372,16 @@ public class MappedFile extends ReferenceResource {
         return write > flush;
     }
 
+    /**
+     * 判断是否执行 commit 操作 如果文件己满返回 true ；如果 commitLeastPages 大于 0,
+     * 则比较 wrotePosition 当前 writeBuffe 的写指针）与上一次提交的指针（committedPosition)
+     * 的差值，除 OS_ PAGE_ SIZE 得到当前脏页的数量，如果大于 commitLeastPages 则返回
+     * true ；如 commitLeastPages 小于0 表示只要存在脏页就提交
+     *
+     *
+     * @param commitLeastPages
+     * @return
+     */
     protected boolean isAbleToCommit(final int commitLeastPages) {
         int flush = this.committedPosition.get();
         int write = this.wrotePosition.get();

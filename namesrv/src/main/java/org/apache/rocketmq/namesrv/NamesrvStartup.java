@@ -78,10 +78,13 @@ public class NamesrvStartup {
             System.exit(-1);
             return null;
         }
-
+        //第一步：首先来解析配置文件 需要填充 NameServeronfig NettyServerConfig 属性值
+        //业务参数
         final NamesrvConfig namesrvConfig = new NamesrvConfig();
+        //网络参数
         final NettyServerConfig nettyServerConfig = new NettyServerConfig();
         nettyServerConfig.setListenPort(9876);
+        //参数来源：-c通过-c指定配置文件的路径
         if (commandLine.hasOption('c')) {
             String file = commandLine.getOptionValue('c');
             if (file != null) {
@@ -122,7 +125,7 @@ public class NamesrvStartup {
 
         MixAll.printObjectProperties(log, namesrvConfig);
         MixAll.printObjectProperties(log, nettyServerConfig);
-
+        //第二步：根据启动属性创建NamesrvController实例，并初始化实例，NamesrvController实例为nameserver的核心控制器
         final NamesrvController controller = new NamesrvController(namesrvConfig, nettyServerConfig);
 
         // remember all configs to prevent discard
@@ -142,7 +145,7 @@ public class NamesrvStartup {
             controller.shutdown();
             System.exit(-3);
         }
-
+        //第三步：注册钩子函数
         Runtime.getRuntime().addShutdownHook(new ShutdownHookThread(log, new Callable<Void>() {
             @Override
             public Void call() throws Exception {

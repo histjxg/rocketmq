@@ -389,6 +389,15 @@ public class CommitLog {
         return new DispatchRequest(-1, false /* success */);
     }
 
+    /**
+     * 根据消息、体的长度 主题的长度、属性的长度结合消息存储格式计算消息的总长度
+     *
+     * @param sysFlag
+     * @param bodyLength
+     * @param topicLength
+     * @param propertiesLength
+     * @return
+     */
     protected static int calMsgLength(int sysFlag, int bodyLength, int topicLength, int propertiesLength) {
         int bornhostLength = (sysFlag & MessageSysFlag.BORNHOST_V6_FLAG) == 0 ? 8 : 20;
         int storehostAddressLength = (sysFlag & MessageSysFlag.STOREHOSTADDRESS_V6_FLAG) == 0 ? 8 : 20;
@@ -802,6 +811,8 @@ public class CommitLog {
         if (tranType == MessageSysFlag.TRANSACTION_NOT_TYPE
             || tranType == MessageSysFlag.TRANSACTION_COMMIT_TYPE) {
             // Delay Delivery
+            //如果消息的延迟级别大于0 ，将消息的原主题名称与原消息队列 ID 存入消息属性中，用延迟消息主题 SCHEDULE TOPIC
+            //消息队列 ID 更新原先消息的主题与队列，这是并发消息消费重试关键的一步
             if (msg.getDelayTimeLevel() > 0) {
                 if (msg.getDelayTimeLevel() > this.defaultMessageStore.getScheduleMessageService().getMaxDelayLevel()) {
                     msg.setDelayTimeLevel(this.defaultMessageStore.getScheduleMessageService().getMaxDelayLevel());
@@ -832,9 +843,11 @@ public class CommitLog {
 
         long elapsedTimeInLock = 0;
 
+        //获取当前的写入的commitlog文件，RocketMQ 物理文件的组织方式看目录：/Users/bjhl/IdeaProjects/rocketmq/rocketmq-nameserver/store/commitlog
         MappedFile unlockMappedFile = null;
+        //获取文件夹的下一个个的文件
         MappedFile mappedFile = this.mappedFileQueue.getLastMappedFile();
-
+        //在写入 CornrnitLog 之前，先申请 putMessageLock ，也就是将消息存储到CornrnitLog 文件中是串行的
         putMessageLock.lock(); //spin or ReentrantLock ,depending on store config
         try {
             long beginLockTimestamp = this.defaultMessageStore.getSystemClock().now();
@@ -842,7 +855,12 @@ public class CommitLog {
 
             // Here settings are stored timestamp, in order to ensure an orderly
             // global
+            //设置消息的存储时间
             msg.setStoreTimestamp(beginLockTimestamp);
+
+            //如果rnappedFile 空，表明$ {ROCKET_HOME}/store/cornrnitlog 目录下不存在任何文件
+            //说明本次消息是第一次消息发送，用偏移量 创建第一个 commit 文件，文件为 00000000000000000000
+            //，如果文件创建失败，抛出 CREATE MAPEDFILE FAILED ，很有可 是磁盘空间不足或权限不够
 
             if (null == mappedFile || mappedFile.isFull()) {
                 mappedFile = this.mappedFileQueue.getLastMappedFile(0); // Mark: NewFile may be cause noise
@@ -853,6 +871,9 @@ public class CommitLog {
                 return new PutMessageResult(PutMessageStatus.CREATE_MAPEDFILE_FAILED, null);
             }
 
+
+            //将消息追加到MappedFile中，首先先获取 MappedFile 当前写指针，如果currentPos 大于或等于文件大小则表明文件已写满，抛出 AppendMessageStatus. UNKNOWN_ERROR
+            //如果 currentPos 小于文件大小，通过 slice （）方法创建一个与 MappedFile 的共享内存区，并设置 position 为当前指针
             result = mappedFile.appendMessage(msg, this.appendMessageCallback);
             switch (result.getStatus()) {
                 case PUT_OK:
@@ -1541,6 +1562,7 @@ public class CommitLog {
             }
 
             // Record ConsumeQueue information
+            //获取该消息在消息队列的偏 CommitLog 中保存了当前所有消息队列的当前待写入偏移量
             keyBuilder.setLength(0);
             keyBuilder.append(msgInner.getTopic());
             keyBuilder.append('-');
@@ -1584,7 +1606,7 @@ public class CommitLog {
             final int topicLength = topicData.length;
 
             final int bodyLength = msgInner.getBody() == null ? 0 : msgInner.getBody().length;
-
+            //9.根据消息、体的长度 主题的长度、属性的长度结合消息存储格式计算消息的总长度
             final int msgLen = calMsgLength(msgInner.getSysFlag(), bodyLength, topicLength, propertiesLength);
 
             // Exceeds the maximum message
@@ -1595,6 +1617,9 @@ public class CommitLog {
             }
 
             // Determines whether there is sufficient free space
+           // 10.如果消息长度＋END FILE_ MIN_ BLANK_ LENGTH 大于 CommitLog 文件的空闲空间，则返回 AppendMessageStatus.END_OF_FILE
+            //Broker 会重新创建一个新的CommitLog 文件来存储该消息,从这里可以看出，每个 CommitLog 文件最少会空 个字
+            //节，高 字节存储当前文件剩余空间，低 字节存储魔数 CommitLog.BLANK MAGIC CODE
             if ((msgLen + END_FILE_MIN_BLANK_LENGTH) > maxBlank) {
                 this.resetByteBuffer(this.msgStoreItemMemory, maxBlank);
                 // 1 TOTALSIZE
@@ -1604,6 +1629,8 @@ public class CommitLog {
                 // 3 The remaining space may be any value
                 // Here the length of the specially set maxBlank
                 final long beginTimeMills = CommitLog.this.defaultMessageStore.now();
+                //11.将消息内容存储到 ByteBuffer 中，然后创建 AppendMessageResult 这里只
+                //是将消息存储在 MappedFile 应的内存映射 Buffer ，并没有刷写到磁盘，
                 byteBuffer.put(this.msgStoreItemMemory.array(), 0, maxBlank);
                 return new AppendMessageResult(AppendMessageStatus.END_OF_FILE, wroteOffset, maxBlank, msgId, msgInner.getStoreTimestamp(),
                     queueOffset, CommitLog.this.defaultMessageStore.now() - beginTimeMills);

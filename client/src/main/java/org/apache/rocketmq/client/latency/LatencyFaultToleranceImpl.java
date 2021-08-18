@@ -29,8 +29,19 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
 
     private final ThreadLocalIndex whichItemWorst = new ThreadLocalIndex();
 
+    /**
+     * 更新失败条目
+     * @param name
+     * @param currentLatency
+     * @param notAvailableDuration
+     *
+     */
     @Override
     public void updateFaultItem(final String name, final long currentLatency, final long notAvailableDuration) {
+        //根据 broker 名称从 缓存表中获 Faultitem，如果找到则更新 Faultltem ，否则创建Faultltem
+        //两个关键点：
+        //1 ) currentLatency, startTimeStamp被 volatile 修饰
+        //2)startTimeStamp 为当前系统时间加上需要规避的时长 startTimeStamp 判断 broker 当前是否可用的直接一句，请看 Faultltem isAvailable 方法
         FaultItem old = this.faultItemTable.get(name);
         if (null == old) {
             final FaultItem faultItem = new FaultItem(name);
@@ -48,6 +59,11 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
         }
     }
 
+    /**
+     * 判断 Broker 是否可用
+     * @param name
+     * @return
+     */
     @Override
     public boolean isAvailable(final String name) {
         final FaultItem faultItem = this.faultItemTable.get(name);
@@ -57,11 +73,19 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
         return true;
     }
 
+    /**
+     * 移除 Fault 条目，意味 Broker 重新参与路由计算
+     * @param name
+     */
     @Override
     public void remove(final String name) {
         this.faultItemTable.remove(name);
     }
 
+    /**
+     * 尝试从规避的 Broker 中选择 个可用的 Broker ，如果没有找到，将返回 null
+     * @return
+     */
     @Override
     public String pickOneAtLeast() {
         final Enumeration<FaultItem> elements = this.faultItemTable.elements();
@@ -97,8 +121,11 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
     }
 
     class FaultItem implements Comparable<FaultItem> {
+        //条目唯一键，这里为 brokerName
         private final String name;
+        //本次消息发送延迟
         private volatile long currentLatency;
+        //故障规避开始时间
         private volatile long startTimestamp;
 
         public FaultItem(final String name) {

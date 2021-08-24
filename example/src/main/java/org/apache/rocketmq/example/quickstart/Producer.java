@@ -26,6 +26,24 @@ import org.apache.rocketmq.remoting.common.RemotingHelper;
  * This class demonstrates how to send messages to brokers using provided {@link DefaultMQProducer}.
  */
 public class Producer {
+    /**
+     * 发送消息的经过五个步骤：
+     *  1）设置Producer的GroupName。
+         *2）设置InstanceName，当一个Jvm需要启动多个Producer的时候，通过设置不同的
+         *  InstanceName来区分，不设置的话系统使用默认名称“DEFAULT”。
+     * 3）设置发送失败重试次数，当网络出现异常的时候，这个次数影响消息的重复投递次数。想保证
+     *  不丢消息，可以设置多重试几次。
+     *  4）设置NameServer地址
+     *  5）组装消息并发送。
+     *
+     *
+     *
+     *
+     *
+     * @param args
+     * @throws MQClientException
+     * @throws InterruptedException
+     */
     public static void main(String[] args) throws MQClientException, InterruptedException {
 
         /*
@@ -64,6 +82,12 @@ public class Producer {
 
                 /*
                  * Call send message to deliver message to one of brokers.
+                 */
+                /**
+                 * 发送消息经过三步：
+                 * 1. 客户端发送请求到服务器。
+                 * 2. 服务器处理该请求。
+                 * 3. 服务器向客户端返回应答
                  */
                 SendResult sendResult = producer.send(msg);
 

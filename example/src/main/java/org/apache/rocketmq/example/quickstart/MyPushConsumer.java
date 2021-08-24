@@ -16,9 +16,6 @@
  */
 package org.apache.rocketmq.example.quickstart;
 
-import java.util.List;
-import java.util.Set;
-
 import org.apache.rocketmq.client.consumer.DefaultMQPullConsumer;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.consumer.PullResult;
@@ -33,16 +30,26 @@ import org.apache.rocketmq.common.message.MessageExt;
 import org.apache.rocketmq.common.message.MessageQueue;
 import org.apache.rocketmq.remoting.exception.RemotingException;
 
+import java.util.List;
+import java.util.Set;
+
 /**
  * This example shows how to subscribe and consume messages using providing {@link DefaultMQPushConsumer}.
  */
-public class Consumer {
+public class MyPushConsumer {
 
     public static void main(String[] args)
             throws InterruptedException, MQClientException, RemotingException, MQBrokerException {
 
         /*
          * Instantiate with specified consumer group name.
+         */
+        /**
+         * DefaultMQPushConsumer的负载均衡过程不需要使用者操心，客户端程序会自动处理，每个
+         * DefaultMQPushConsumer启动后，会马上会触发一个doRebalance动作
+         * 而且在同一个ConsumerGroup里加入新的DefaultMQPush-Consumer时，各个Consumer都会被触发
+         * doRebalance动作。
+         *
          */
         DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("please_rename_unique_group_name_4");
 

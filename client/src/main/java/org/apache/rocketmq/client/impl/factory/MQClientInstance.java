@@ -227,21 +227,36 @@ public class MQClientInstance {
 
         synchronized (this) {
             switch (this.serviceState) {
+                //默认状态
                 case CREATE_JUST:
                     this.serviceState = ServiceState.START_FAILED;
                     // If not specified,looking address from name server
+                    // 如果nameserver地址为空，会去`http:// + WS_DOMAIN_NAME + ":8080/rocketmq/" + WS_DOMAIN_SUBGROUP`获取，
+                    // WS_DOMAIN_NAME由配置参数rocketmq.namesrv.domain设置，WS_DOMAIN_SUBG由配置参数rocketmq.namesrv.domain.subgroup设置
                     if (null == this.clientConfig.getNamesrvAddr()) {
                         this.mQClientAPIImpl.fetchNameServerAddr();
                     }
                     // Start request-response channel
                     this.mQClientAPIImpl.start();
                     // Start various schedule tasks
+                    /**
+                     * 1.定时30s拉取最新的broker和topic的路由信息
+                     * 2.定时30s向broker发送心跳包
+                     * 3.定时5s持久化consumer的offset
+                     * 4.定时1分钟，动态调整线程池线程数量
+                     */
                     this.startScheduledTask();
                     // Start pull service
+                    // 启动消息拉去服务 如果有是producer 该服务没有consumer
                     this.pullMessageService.start();
                     // Start rebalance service
+                    /**
+                     * 消息队列重新负载，默认为平均负载
+                     * 20s重新更新一次consumer的消费队列
+                     */
                     this.rebalanceService.start();
                     // Start push service
+                    // 启动producer消息推送服务
                     this.defaultMQProducer.getDefaultMQProducerImpl().start(false);
                     log.info("the client factory [{}] start OK", this.clientId);
                     this.serviceState = ServiceState.RUNNING;
@@ -256,6 +271,7 @@ public class MQClientInstance {
 
     private void startScheduledTask() {
         if (null == this.clientConfig.getNamesrvAddr()) {
+            //2分钟拉去nameserver地址信息
             this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
                 @Override
@@ -268,7 +284,7 @@ public class MQClientInstance {
                 }
             }, 1000 * 10, 1000 * 60 * 2, TimeUnit.MILLISECONDS);
         }
-
+        //定时30s拉取最新的broker和topic的路由信息
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -281,6 +297,7 @@ public class MQClientInstance {
             }
         }, 10, this.clientConfig.getPollNameServerInterval(), TimeUnit.MILLISECONDS);
 
+        //定时30s向broker发送心跳包
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -293,7 +310,7 @@ public class MQClientInstance {
                 }
             }
         }, 1000, this.clientConfig.getHeartbeatBrokerInterval(), TimeUnit.MILLISECONDS);
-
+        //定时5s持久化consumer的offset
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -306,6 +323,7 @@ public class MQClientInstance {
             }
         }, 1000 * 10, this.clientConfig.getPersistConsumerOffsetInterval(), TimeUnit.MILLISECONDS);
 
+        //定时1分钟，动态调整线程池线程数量
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override

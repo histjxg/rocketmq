@@ -71,6 +71,8 @@ public class Consumer {
         /*
          * Subscribe one more more topics to consume.
          */
+        //这里将主要就是给consumer队列负载服务设置了订阅信息并放到内存中
+        ////第一个参数表示：订阅的topic   第二个参数表示消息过滤器：* 表示接收所有信息 一个消费者订阅一个topic
         consumer.subscribe("TopicTest", "*");
         // 设置 NameServer 地址，保证  Consumer 可以从 NameServer 获取到 Broker 地址
         consumer.setNamesrvAddr("127.0.0.1:9876");
@@ -78,6 +80,7 @@ public class Consumer {
         /*
          *  Register callback to execute on arrival of messages fetched from brokers.
          */
+        //并发消费
         consumer.registerMessageListener(new MessageListenerConcurrently() {
 
             @Override

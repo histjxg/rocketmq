@@ -242,12 +242,13 @@ public abstract class RebalanceImpl {
 
     /**
      * rebalanceByTopic()方法根据消费者通信类型为“广播模式”还是“集群模式”做不同的逻辑处理
-     *
+     * 该方法是实现Consumer端负载均衡的核心。
      * @param topic
      * @param isOrder
      */
     private void rebalanceByTopic(final String topic, final boolean isOrder) {
         switch (messageModel) {
+            //广播模式
             case BROADCASTING: {
                 Set<MessageQueue> mqSet = this.topicSubscribeInfoTable.get(topic);
                 if (mqSet != null) {
@@ -265,6 +266,7 @@ public abstract class RebalanceImpl {
                 }
                 break;
             }
+            //集群模式
             case CLUSTERING: {
                 Set<MessageQueue> mqSet = this.topicSubscribeInfoTable.get(topic);
                 List<String> cidAll = this.mQClientFactory.findConsumerIdList(topic, consumerGroup);

@@ -16,15 +16,15 @@
  */
 package org.apache.rocketmq.example.quickstart;
 
-import java.util.List;
-import java.util.Set;
-
 import org.apache.rocketmq.client.consumer.DefaultMQPullConsumer;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.consumer.PullResult;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
+import org.apache.rocketmq.client.consumer.listener.ConsumeOrderlyContext;
+import org.apache.rocketmq.client.consumer.listener.ConsumeOrderlyStatus;
 import org.apache.rocketmq.client.consumer.listener.MessageListenerConcurrently;
+import org.apache.rocketmq.client.consumer.listener.MessageListenerOrderly;
 import org.apache.rocketmq.client.consumer.rebalance.AllocateMessageQueueAveragely;
 import org.apache.rocketmq.client.exception.MQBrokerException;
 import org.apache.rocketmq.client.exception.MQClientException;
@@ -33,10 +33,13 @@ import org.apache.rocketmq.common.message.MessageExt;
 import org.apache.rocketmq.common.message.MessageQueue;
 import org.apache.rocketmq.remoting.exception.RemotingException;
 
+import java.util.List;
+import java.util.Set;
+
 /**
  * This example shows how to subscribe and consume messages using providing {@link DefaultMQPushConsumer}.
  */
-public class Consumer {
+public class MyPushOrderLyConsumer {
 
     public static void main(String[] args)
             throws InterruptedException, MQClientException, RemotingException, MQBrokerException {
@@ -44,7 +47,14 @@ public class Consumer {
         /*
          * Instantiate with specified consumer group name.
          */
-        DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("please_rename_unique_group_name_3");
+        /**
+         * DefaultMQPushConsumer的负载均衡过程不需要使用者操心，客户端程序会自动处理，每个
+         * DefaultMQPushConsumer启动后，会马上会触发一个doRebalance动作
+         * 而且在同一个ConsumerGroup里加入新的DefaultMQPush-Consumer时，各个Consumer都会被触发
+         * doRebalance动作。
+         *
+         */
+        DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("please_rename_unique_group_name_4");
 
 
         /*
@@ -71,32 +81,27 @@ public class Consumer {
         /*
          * Subscribe one more more topics to consume.
          */
-        //这里将主要就是给consumer队列负载服务设置了订阅信息并放到内存中
-        ////第一个参数表示：订阅的topic   第二个参数表示消息过滤器：* 表示接收所有信息 一个消费者订阅一个topic
         consumer.subscribe("TopicTest", "*");
         // 设置 NameServer 地址，保证  Consumer 可以从 NameServer 获取到 Broker 地址
         consumer.setNamesrvAddr("127.0.0.1:9876");
 
-
-        // 设置重新消费的次数
-        // 共16个级别，大于16的一律按照2小时重试
-        consumer.setMaxReconsumeTimes(3);
         /*
          *  Register callback to execute on arrival of messages fetched from brokers.
          */
-        //并发消费
-//        consumer.registerMessageListener(new MessageListenerConcurrently() {
-//
-//            @Override
-//            public ConsumeConcurrentlyStatus consumeMessage(List<MessageExt> msgs,
-//                ConsumeConcurrentlyContext context) {
-//                System.out.printf("%s Receive New Messages: %s %n", Thread.currentThread().getName(), msgs);
-//                return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
-//            }
-//        });
+        //顺序消费
+        consumer.registerMessageListener(new MessageListenerOrderly() {
 
-        //模拟死信队列
-        consumer.registerMessageListener(new MyConcurrentlyMessageListenerRetry());
+            @Override
+            public ConsumeOrderlyStatus consumeMessage(List<MessageExt> msgs, ConsumeOrderlyContext context) {
+                for (MessageExt msg : msgs) {
+                    System.out.println(msg.getMsgId() + "\t" + msg.getQueueId() +
+                            "\t" + new String(msg.getBody()));
+                }
+                return ConsumeOrderlyStatus.SUCCESS;
+            }
+
+        });
+
 
 
 

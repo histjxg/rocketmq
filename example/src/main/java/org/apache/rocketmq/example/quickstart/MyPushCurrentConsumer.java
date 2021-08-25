@@ -36,7 +36,7 @@ import java.util.Set;
 /**
  * This example shows how to subscribe and consume messages using providing {@link DefaultMQPushConsumer}.
  */
-public class MyPushConsumer {
+public class MyPushCurrentConsumer {
 
     public static void main(String[] args)
             throws InterruptedException, MQClientException, RemotingException, MQBrokerException {

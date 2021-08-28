@@ -158,8 +158,11 @@ public class MQClientInstance {
     }
 
     public static TopicPublishInfo topicRouteData2TopicPublishInfo(final String topic, final TopicRouteData route) {
+        //创建TopicPublishInfo对象
         TopicPublishInfo info = new TopicPublishInfo();
+        //关联topicRoute
         info.setTopicRouteData(route);
+        //顺序消息,更新TopicPublishInfo
         if (route.getOrderTopicConf() != null && route.getOrderTopicConf().length() > 0) {
             String[] brokers = route.getOrderTopicConf().split(";");
             for (String broker : brokers) {
@@ -175,12 +178,17 @@ public class MQClientInstance {
         } else {
             //循环遍历路由 信息 QueueData 信息，如果队列 没有写权 限，则继续遍历下 一个QueueData
             //根据 brokerName 找到 brokerData 信息 ，找不到或没有找到 Master 节点，则遍历下一个 QueueData
+            //非顺序消息更新TopicPublishInfo
             List<QueueData> qds = route.getQueueDatas();
             Collections.sort(qds);
+            //遍历topic队列信息
             for (QueueData qd : qds) {
+                //是否是写队列
                 if (PermName.isWriteable(qd.getPerm())) {
                     BrokerData brokerData = null;
+                    //遍历写队列Broker
                     for (BrokerData bd : route.getBrokerDatas()) {
+                        //根据名称获得读队列对应的Broker
                         if (bd.getBrokerName().equals(qd.getBrokerName())) {
                             brokerData = bd;
                             break;
@@ -204,7 +212,7 @@ public class MQClientInstance {
 
             info.setOrderTopic(false);
         }
-
+        //返回TopicPublishInfo对象
         return info;
     }
 
@@ -632,10 +640,11 @@ public class MQClientInstance {
     public boolean updateTopicRouteInfoFromNameServer(final String topic, boolean isDefault,
         DefaultMQProducer defaultMQProducer) {
         try {
+            //使用默认主题从NameServer获取路由信息
             if (this.lockNamesrv.tryLock(LOCK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
                 try {
                     TopicRouteData topicRouteData;
-                    //1.如果 isD fault true ，则使用 认主题去查询，如果查询到路由信息，则替换路由信息中读写队列个数为消息生产者默认的队列个数（defaultTopicQueueNums ）；
+                    //1.如果 isDefault true ，则使用默认认主题去查询，如果查询到路由信息，则替换路由信息中读写队列个数为消息生产者默认的队列个数（defaultTopicQueueNums ）；
                     //如果isDefault false ，则使用参数 topic 去查询；如果未查询到路由信息，则返回 false，表示路由信息未变化
                     if (isDefault && defaultMQProducer != null) {
                         topicRouteData = this.mQClientAPIImpl.getDefaultTopicRouteInfoFromNameServer(defaultMQProducer.getCreateTopicKey(),
@@ -648,10 +657,12 @@ public class MQClientInstance {
                             }
                         }
                     } else {
+                        //使用指定主题从NameServer获取路由信息
                         topicRouteData = this.mQClientAPIImpl.getTopicRouteInfoFromNameServer(topic, 1000 * 3);
                     }
                     if (topicRouteData != null) {
                         //2.如果路由信息找到，与本地缓存中的路由信息进行对比，判断路由信息是否发生了改变， 如果未发生变化，则直接返回 false
+                        //判断路由是否需要更改
                         TopicRouteData old = this.topicRouteTable.get(topic);
                         boolean changed = topicRouteDataIsChange(old, topicRouteData);
                         if (!changed) {
@@ -672,13 +683,16 @@ public class MQClientInstance {
                             {
                                 //4.根据 topicRouteData 中的 List<QueueData> 转换成问icPublis凶曲的 List<MessageQueue>列表
                                 //其具体实现在 picRou Data2TopicPublishh巾， 然后会更新该 MQC!ientfustan臼所管辖的所有消息发送关于 topic 的路由信息
+                                //将topicRouteData转换为发布队列
                                 TopicPublishInfo publishInfo = topicRouteData2TopicPublishInfo(topic, topicRouteData);
                                 publishInfo.setHaveTopicRouterInfo(true);
+                                //遍历生产
                                 Iterator<Entry<String, MQProducerInner>> it = this.producerTable.entrySet().iterator();
                                 while (it.hasNext()) {
                                     Entry<String, MQProducerInner> entry = it.next();
                                     MQProducerInner impl = entry.getValue();
                                     if (impl != null) {
+                                        //生产者不为空时,更新publishInfo信息
                                         impl.updateTopicPublishInfo(topic, publishInfo);
                                     }
                                 }

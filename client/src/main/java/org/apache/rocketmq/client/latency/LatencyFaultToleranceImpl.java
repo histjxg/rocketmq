@@ -120,6 +120,10 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
             '}';
     }
 
+    /**
+     * FaultItem：失败条目
+     * 如果向一个brokerName的broker发送消息失败，等待多长时间重试该broker
+     */
     class FaultItem implements Comparable<FaultItem> {
         //条目唯一键，这里为 brokerName
         private final String name;

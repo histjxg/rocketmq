@@ -67,7 +67,7 @@ public class DefaultMQProducer extends ClientConfig implements MQProducer {
      * Producer group conceptually aggregates all producer instances of exactly same role, which is particularly
      * important when transactional messages are involved. </p>
      *
-     * For non-transactional messages, it does not matter as long as it's unique per process. </p>
+     * For non-transactional , it does not matter as long as it's unique per process. </p>
      *
      * See {@linktourl http://rocketmq.apache.org/docs/core-concept/} for more discussion.
      */

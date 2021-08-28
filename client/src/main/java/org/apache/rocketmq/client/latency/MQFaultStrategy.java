@@ -30,9 +30,9 @@ public class MQFaultStrategy {
     private final LatencyFaultTolerance<String> latencyFaultTolerance = new LatencyFaultToleranceImpl();
 
     private boolean sendLatencyFaultEnable = false;
-    //latency Max ，根据 currentLatency 本次消息发送延迟，从 latency Max 尾部向前找到第一个比 currentLatency 小的索引 index，如果没有找到，返回0
+    //根据currentLatency本地消息发送延迟,从latencyMax尾部向前找到第一个比 currentLatency小的索引,如果没有找到,返回0
     private long[] latencyMax = {50L, 100L, 550L, 1000L, 2000L, 3000L, 15000L};
-    //然后 根据这个索引从notAvailableDuration 数组中取出对应的时间 ，在这个时长内， Broker 将设为不可用
+    //根据这个索引从notAvailableDuration取出对应的时间,在该时长内,Broker设置为不可用
     private long[] notAvailableDuration = {0L, 0L, 30000L, 60000L, 120000L, 180000L, 600000L};
 
     public long[] getNotAvailableDuration() {
@@ -61,9 +61,10 @@ public class MQFaultStrategy {
 
 
     public MessageQueue selectOneMessageQueue(final TopicPublishInfo tpInfo, final String lastBrokerName) {
-        //sendLatencyFaultEnable=true ，启用 Broker 障延迟机制
+        //sendLatencyFaultEnable=true ，启用 Broker故障延迟机制
         if (this.sendLatencyFaultEnable) {
             try {
+                //对sendWhichQueue自增
                 int index = tpInfo.getSendWhichQueue().incrementAndGet();
                 //1 ）根据对消息队列进行轮询获取一个消息队列
                 for (int i = 0; i < tpInfo.getMessageQueueList().size(); i++) {
@@ -75,10 +76,12 @@ public class MQFaultStrategy {
                     if (latencyFaultTolerance.isAvailable(mq.getBrokerName()))
                         return mq;
                 }
-
+                //从规避的Broker中选择一个可用的Broker
                 final String notBestBroker = latencyFaultTolerance.pickOneAtLeast();
+                //获得Broker的写队列集合
                 int writeQueueNums = tpInfo.getQueueIdByBroker(notBestBroker);
                 if (writeQueueNums > 0) {
+                    //获得一个队列,指定broker和队列ID并返回
                     final MessageQueue mq = tpInfo.selectOneMessageQueue();
                     if (notBestBroker != null) {
                         mq.setBrokerName(notBestBroker);

@@ -33,6 +33,7 @@ public interface MQAdmin {
      * @param newTopic topic name
      * @param queueNum topic's queue number
      */
+    //创建主题
     void createTopic(final String key, final String newTopic, final int queueNum)
         throws MQClientException;
 
@@ -55,6 +56,7 @@ public interface MQAdmin {
      * @param timestamp from when in milliseconds.
      * @return offset
      */
+    //根据时间戳从队列中查找消息偏移量
     long searchOffset(final MessageQueue mq, final long timestamp) throws MQClientException;
 
     /**
@@ -63,6 +65,7 @@ public interface MQAdmin {
      * @param mq Instance of MessageQueue
      * @return the max offset
      */
+    //查找消息队列中最大的偏移量
     long maxOffset(final MessageQueue mq) throws MQClientException;
 
     /**
@@ -71,6 +74,7 @@ public interface MQAdmin {
      * @param mq Instance of MessageQueue
      * @return the minimum offset
      */
+    //查找消息队列中最小的偏移量
     long minOffset(final MessageQueue mq) throws MQClientException;
 
     /**
@@ -87,6 +91,7 @@ public interface MQAdmin {
      * @param offsetMsgId message id
      * @return message
      */
+    //根据偏移量查找消息
     MessageExt viewMessage(final String offsetMsgId) throws RemotingException, MQBrokerException,
         InterruptedException, MQClientException;
 
@@ -100,12 +105,14 @@ public interface MQAdmin {
      * @param end to when
      * @return Instance of QueryResult
      */
+    //根据条件查找消息
     QueryResult queryMessage(final String topic, final String key, final int maxNum, final long begin,
         final long end) throws MQClientException, InterruptedException;
 
     /**
      * @return The {@code MessageExt} of given msgId
      */
+    //根据消息ID和主题查找消息
     MessageExt viewMessage(String topic,
         String msgId) throws RemotingException, MQBrokerException, InterruptedException, MQClientException;
 

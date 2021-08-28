@@ -107,7 +107,7 @@ public class NamesrvStartup {
             MixAll.printObjectProperties(console, nettyServerConfig);
             System.exit(0);
         }
-
+        //将启动参数填充到namesrvConfig,nettyServerConfig
         MixAll.properties2Object(ServerUtil.commandLine2Properties(commandLine), namesrvConfig);
 
         if (null == namesrvConfig.getRocketmqHome()) {

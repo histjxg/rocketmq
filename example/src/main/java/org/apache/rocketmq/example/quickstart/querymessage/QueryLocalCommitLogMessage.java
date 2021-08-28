@@ -23,7 +23,7 @@ import java.util.Map;
  * @Description:
  */
 
-public class QueryLocalMessage {
+public class QueryLocalCommitLogMessage {
 
 
     public static void main(String[] args) throws Exception {
@@ -42,6 +42,7 @@ public class QueryLocalMessage {
                     new String(ms.getBody())+"队列ID:"+ms.getQueueId()+" 存储地址:"+ms.getStoreHost());
         }
     }
+
 
 
 

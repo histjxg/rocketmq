@@ -120,7 +120,7 @@ public class RouteInfoManager {
                 //1：路由 注册需要加写锁 ，防止并发修改 RoutelnfoManager 中的路由表。首先判断
                 //Broker 所属 集群是否存在， 如果不存在，则创建，然后将 broker 名加入到集群 Broker集合中；
                 this.lock.writeLock().lockInterruptibly();
-
+                //维护clusterAddrTable
                 Set<String> brokerNames = this.clusterAddrTable.get(clusterName);
                 if (null == brokerNames) {
                     brokerNames = new HashSet<String>();
@@ -156,7 +156,7 @@ public class RouteInfoManager {
                 //3.如 Broker为 Master ，并且 Broker Topic 配置信息发生变更或者是初 次注测
                 //需要创建或更新Topic 由元数据，填充 topicQueueTable 其实就是为默认主题自动注册路由信息，其中包 MixAII.DEFAULT_TOPIC 路由信息
                 //当消息生产者发送主题果该主题未创建Brokeronfig的 autoCreateTopicnable为true 时， 返回 MixAII.DEFAULT_TOPIC 的路由信息
-
+                //维护topicQueueTable
                 if (null != topicConfigWrapper
                     && MixAll.MASTER_ID == brokerId) {
                     if (this.isBrokerTopicConfigChanged(brokerAddr, topicConfigWrapper.getDataVersion())
@@ -172,7 +172,7 @@ public class RouteInfoManager {
                         }
                     }
                 }
-
+                //维护brokerLiveTable
                 BrokerLiveInfo prevBrokerLiveInfo = this.brokerLiveTable.put(brokerAddr,
                     new BrokerLiveInfo(
                         System.currentTimeMillis(),
@@ -186,6 +186,7 @@ public class RouteInfoManager {
                 //5.注册Broker 的过滤器 Server 地址列表 ，一 Broker 会关联多 FilterServer
                 //消息过滤服务器，此部分内容将在第 章详细介绍；如果此 Broker 为从节点，则需要查找该
                 //Broker Master 的节点信息，并更新对应 masterAddr 属性
+                //维护filterServerList
                 if (filterServerList != null) {
                     if (filterServerList.isEmpty()) {
                         this.filterServerTable.remove(brokerAddr);
@@ -236,25 +237,29 @@ public class RouteInfoManager {
     }
 
     private void createAndUpdateQueueData(final String brokerName, final TopicConfig topicConfig) {
+        //创建QueueData
         QueueData queueData = new QueueData();
         queueData.setBrokerName(brokerName);
         queueData.setWriteQueueNums(topicConfig.getWriteQueueNums());
         queueData.setReadQueueNums(topicConfig.getReadQueueNums());
         queueData.setPerm(topicConfig.getPerm());
         queueData.setTopicSysFlag(topicConfig.getTopicSysFlag());
-
+        //获得topicQueueTable中队列集合
         List<QueueData> queueDataList = this.topicQueueTable.get(topicConfig.getTopicName());
+        //topicQueueTable为空,则直接添加queueData到队列集合
         if (null == queueDataList) {
             queueDataList = new LinkedList<QueueData>();
             queueDataList.add(queueData);
             this.topicQueueTable.put(topicConfig.getTopicName(), queueDataList);
             log.info("new topic registered, {} {}", topicConfig.getTopicName(), queueData);
         } else {
+            //判断是否是新的队列
             boolean addNewOne = true;
 
             Iterator<QueueData> it = queueDataList.iterator();
             while (it.hasNext()) {
                 QueueData qd = it.next();
+                //如果brokerName相同,代表不是新的队列
                 if (qd.getBrokerName().equals(brokerName)) {
                     if (qd.equals(queueData)) {
                         addNewOne = false;
@@ -265,7 +270,7 @@ public class RouteInfoManager {
                     }
                 }
             }
-
+            //如果是新的队列,则添加队列到queueDataList
             if (addNewOne) {
                 queueDataList.add(queueData);
             }
@@ -448,16 +453,22 @@ public class RouteInfoManager {
     }
 
     public void scanNotActiveBroker() {
+        //获得brokerLiveTable
         Iterator<Entry<String, BrokerLiveInfo>> it = this.brokerLiveTable.entrySet().iterator();
+        //遍历brokerLiveTable
         while (it.hasNext()) {
             Entry<String, BrokerLiveInfo> next = it.next();
             long last = next.getValue().getLastUpdateTimestamp();
-            //然后 Nam Server 每隔 10s 扫描 brokerLiveTable ，，如果连续 20s
-            //有收到心跳包， NameServ 将移除该 Broker 的路由 信息 同时关闭 Socket 连接
+            //然后 NameServer 每隔 10s 扫描 brokerLiveTable ，如果连续 120s
+            //没有收到心跳包， NameServ 将移除该 Broker 的路由 信息， 同时关闭 Socket 连接
+            //如果收到心跳包的时间距当时时间是否超过120s
             if ((last + BROKER_CHANNEL_EXPIRED_TIME) < System.currentTimeMillis()) {
+                //关闭连接
                 RemotingUtil.closeChannel(next.getValue().getChannel());
+                //移除broker
                 it.remove();
                 log.warn("The broker channel expired, {} {}ms", next.getKey(), BROKER_CHANNEL_EXPIRED_TIME);
+                //维护路由表
                 this.onChannelDestroy(next.getKey(), next.getValue().getChannel());
             }
         }
@@ -468,6 +479,7 @@ public class RouteInfoManager {
         if (channel != null) {
             try {
                 try {
+                    //申请写锁,根据brokerAddress从brokerLiveTable和filterServerTable移除
                     this.lock.readLock().lockInterruptibly();
                     Iterator<Entry<String, BrokerLiveInfo>> itBrokerLiveTable =
                         this.brokerLiveTable.entrySet().iterator();
@@ -508,6 +520,7 @@ public class RouteInfoManager {
                     boolean removeBrokerName = false;
                     Iterator<Entry<String, BrokerData>> itBrokerAddrTable =
                         this.brokerAddrTable.entrySet().iterator();
+                    //遍历broker地址
                     while (itBrokerAddrTable.hasNext() && (null == brokerNameFound)) {
                         BrokerData brokerData = itBrokerAddrTable.next().getValue();
 
@@ -516,6 +529,7 @@ public class RouteInfoManager {
                             Entry<Long, String> entry = it.next();
                             Long brokerId = entry.getKey();
                             String brokerAddr = entry.getValue();
+                            //根据broker地址移除brokerAddr
                             if (brokerAddr.equals(brokerAddrFound)) {
                                 brokerNameFound = brokerData.getBrokerName();
                                 it.remove();
@@ -524,7 +538,7 @@ public class RouteInfoManager {
                                 break;
                             }
                         }
-
+                        //如果当前主题只包含待移除的broker,则移除该topic
                         if (brokerData.getBrokerAddrs().isEmpty()) {
                             removeBrokerName = true;
                             itBrokerAddrTable.remove();
@@ -535,12 +549,17 @@ public class RouteInfoManager {
 
                     //根据 BrokerName ，从 clusterAddrTable 中找到 Broker 并从集群 移除 果移
                     //除后，集群中不包含任何 Broker ，则将该集群 clusterAddrTable中移除
+                    //维护clusterAddrTable
                     if (brokerNameFound != null && removeBrokerName) {
                         Iterator<Entry<String, Set<String>>> it = this.clusterAddrTable.entrySet().iterator();
+                        //遍历clusterAddrTable
                         while (it.hasNext()) {
                             Entry<String, Set<String>> entry = it.next();
+                            //获得集群名称
                             String clusterName = entry.getKey();
+                            //获得集群中brokerName集合
                             Set<String> brokerNames = entry.getValue();
+                            //从brokerNames中移除brokerNameFound
                             boolean removed = brokerNames.remove(brokerNameFound);
                             if (removed) {
                                 log.info("remove brokerName[{}], clusterName[{}] from clusterAddrTable, because channel destroyed",
@@ -549,6 +568,7 @@ public class RouteInfoManager {
                                 if (brokerNames.isEmpty()) {
                                     log.info("remove the clusterName[{}] from clusterAddrTable, because channel destroyed and no broker in this cluster",
                                         clusterName);
+                                    //如果集群中不包含任何broker,则移除该集群
                                     it.remove();
                                 }
 
@@ -559,16 +579,21 @@ public class RouteInfoManager {
 
                     //4.根据 brokerName ，遍历所有主题的队列，如果队列中包含了当前 Broker 的队列
                     //则移除，如果 topic 只包含待移除 Broker 的队列的话，从路由表中删除该 topic ，
+                    //维护topicQueueTable队列
                     if (removeBrokerName) {
+                        //遍历topicQueueTable
                         Iterator<Entry<String, List<QueueData>>> itTopicQueueTable =
                             this.topicQueueTable.entrySet().iterator();
                         while (itTopicQueueTable.hasNext()) {
                             Entry<String, List<QueueData>> entry = itTopicQueueTable.next();
+                            //主题名称
                             String topic = entry.getKey();
+                            //队列集合
                             List<QueueData> queueDataList = entry.getValue();
-
+                            //遍历该主题队列
                             Iterator<QueueData> itQueueData = queueDataList.iterator();
                             while (itQueueData.hasNext()) {
+                                //从队列中移除为活跃broker信息
                                 QueueData queueData = itQueueData.next();
                                 if (queueData.getBrokerName().equals(brokerNameFound)) {
                                     itQueueData.remove();
@@ -576,7 +601,7 @@ public class RouteInfoManager {
                                         topic, queueData);
                                 }
                             }
-
+                            //如果该topic的队列为空,则移除该topic
                             if (queueDataList.isEmpty()) {
                                 itTopicQueueTable.remove();
                                 log.info("remove topic[{}] all queue, from topicQueueTable, because channel destroyed",
@@ -584,6 +609,7 @@ public class RouteInfoManager {
                             }
                         }
                     }
+                    //释放写锁
                 } finally {
                     //释放锁，完成路由删除
                     this.lock.writeLock().unlock();

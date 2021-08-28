@@ -884,6 +884,7 @@ public class BrokerController {
         if (!messageStoreConfig.isEnableDLegerCommitLog()) {
             startProcessorByHa(messageStoreConfig.getBrokerRole());
             handleSlaveSynchronize(messageStoreConfig.getBrokerRole());
+            //注册Broker信息
             this.registerBrokerAll(true, false, true);
         }
 
@@ -893,6 +894,7 @@ public class BrokerController {
             @Override
             public void run() {
                 try {
+
                     BrokerController.this.registerBrokerAll(true, false, brokerConfig.isForceRegister());
                 } catch (Throwable e) {
                     log.error("registerBrokerAll Exception", e);

@@ -170,6 +170,7 @@ public class CommitLog {
         final List<MappedFile> mappedFiles = this.mappedFileQueue.getMappedFiles();
         if (!mappedFiles.isEmpty()) {
             // Began to recover from the last third file
+            //Broker正常停止再重启时,从倒数第三个开始恢复,如果不足3个文件,则从第一个文件开 始恢复。
             int index = mappedFiles.size() - 3;
             if (index < 0)
                 index = 0;
@@ -177,17 +178,22 @@ public class CommitLog {
             MappedFile mappedFile = mappedFiles.get(index);
             ByteBuffer byteBuffer = mappedFile.sliceByteBuffer();
             long processOffset = mappedFile.getFileFromOffset();
+            //代表当前已校验通过的offset
             long mappedFileOffset = 0;
             while (true) {
+                //查找消息
                 DispatchRequest dispatchRequest = this.checkMessageAndReturnSize(byteBuffer, checkCRCOnRecover);
+                //消息长度
                 int size = dispatchRequest.getMsgSize();
                 // Normal data
+                //查找结果为true,并且消息长度大于0,表示消息正确.mappedFileOffset向前移动本消息长度
                 if (dispatchRequest.isSuccess() && size > 0) {
                     mappedFileOffset += size;
                 }
                 // Come the end of the file, switch to the next file Since the
                 // return 0 representatives met last hole,
                 // this can not be included in truncate offset
+                //如果查找结果为true且消息长度等于0,表示已到该文件末尾,如果还有下一个文件, 则重置processOffset和MappedFileOffset重复查找下一个文件,否则跳出循环。
                 else if (dispatchRequest.isSuccess() && size == 0) {
                     index++;
                     if (index >= mappedFiles.size()) {
@@ -195,6 +201,7 @@ public class CommitLog {
                         log.info("recover last 3 physics file over, last mapped file " + mappedFile.getFileName());
                         break;
                     } else {
+                        //取出每个文件
                         mappedFile = mappedFiles.get(index);
                         byteBuffer = mappedFile.sliceByteBuffer();
                         processOffset = mappedFile.getFileFromOffset();
@@ -203,15 +210,17 @@ public class CommitLog {
                     }
                 }
                 // Intermediate file read error
+                //查找结果为false，表明该文件未填满所有消息，跳出循环，结束循环
                 else if (!dispatchRequest.isSuccess()) {
                     log.info("recover physics file end, " + mappedFile.getFileName());
                     break;
                 }
             }
-
+            //更新MappedFileQueue的flushedWhere和committedWhere指针
             processOffset += mappedFileOffset;
             this.mappedFileQueue.setFlushedWhere(processOffset);
             this.mappedFileQueue.setCommittedWhere(processOffset);
+            //删除offset之后的所有文件
             this.mappedFileQueue.truncateDirtyFiles(processOffset);
 
             // Clear ConsumeQueue redundant data
@@ -441,16 +450,18 @@ public class CommitLog {
             MappedFile mappedFile = null;
             for (; index >= 0; index--) {
                 mappedFile = mappedFiles.get(index);
+                //判断消息文件是否是一个正确的文件
                 if (this.isMappedFileMatchedRecover(mappedFile)) {
                     log.info("recover from this mapped file " + mappedFile.getFileName());
                     break;
                 }
             }
-
+            //根据索引取出mappedFile文件
             if (index < 0) {
                 index = 0;
                 mappedFile = mappedFiles.get(index);
             }
+            //...验证消息的合法性,并将消息转发到消息消费队列和索引文件
 
             ByteBuffer byteBuffer = mappedFile.sliceByteBuffer();
             long processOffset = mappedFile.getFileFromOffset();
@@ -483,6 +494,7 @@ public class CommitLog {
                             log.info("recover physics file over, last mapped file " + mappedFile.getFileName());
                             break;
                         } else {
+                            //未找到mappedFile,重置flushWhere、committedWhere都为0，销毁消息队列文件
                             mappedFile = mappedFiles.get(index);
                             byteBuffer = mappedFile.sliceByteBuffer();
                             processOffset = mappedFile.getFileFromOffset();

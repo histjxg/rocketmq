@@ -187,25 +187,29 @@ public class DefaultMessageStore implements MessageStore {
         boolean result = true;
 
         try {
+            //判断临时文件是否存在
             boolean lastExitOK = !this.isTempFileExist();
             log.info("last shutdown {}", lastExitOK ? "normally" : "abnormally");
-
+            //加载延时队列
             if (null != scheduleMessageService) {
                 result = result && this.scheduleMessageService.load();
             }
 
             // load Commit Log
+            // 加载CommitLog文件
             result = result && this.commitLog.load();
 
             // load Consume Queue
+            // 加载消费队列文件
             result = result && this.loadConsumeQueue();
 
             if (result) {
+                //加载存储监测点,监测点主要记录CommitLog文件、ConsumerQueue文件、Index索引文件的刷盘点
                 this.storeCheckpoint =
                     new StoreCheckpoint(StorePathConfigHelper.getStoreCheckpoint(this.messageStoreConfig.getStorePathRootDir()));
-
+                //加载index文件
                 this.indexService.load(lastExitOK);
-
+                //根据Broker是否异常退出,执行不同的恢复策略
                 this.recover(lastExitOK);
 
                 log.info("load over, and the max phy offset = {}", this.getMaxPhyOffset());
@@ -1379,7 +1383,7 @@ public class DefaultMessageStore implements MessageStore {
             }
         }
     }
-
+    //根据临时文件判断当前Broker是否异常退出
     private boolean isTempFileExist() {
         String fileName = StorePathConfigHelper.getAbortFile(this.messageStoreConfig.getStorePathRootDir());
         File file = new File(fileName);
@@ -1387,22 +1391,27 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     private boolean loadConsumeQueue() {
+        //执行消费队列目录
         File dirLogic = new File(StorePathConfigHelper.getStorePathConsumeQueue(this.messageStoreConfig.getStorePathRootDir()));
         File[] fileTopicList = dirLogic.listFiles();
         if (fileTopicList != null) {
-
+            //遍历消费队列目录
             for (File fileTopic : fileTopicList) {
+                //获得子目录名称,即topic名称
                 String topic = fileTopic.getName();
-
+                //遍历子目录下的消费队列文件
                 File[] fileQueueIdList = fileTopic.listFiles();
                 if (fileQueueIdList != null) {
+                    //遍历文件
                     for (File fileQueueId : fileQueueIdList) {
+                        //文件名称即队列ID
                         int queueId;
                         try {
                             queueId = Integer.parseInt(fileQueueId.getName());
                         } catch (NumberFormatException e) {
                             continue;
                         }
+                        //创建消费队列并加载到内存
                         ConsumeQueue logic = new ConsumeQueue(
                             topic,
                             queueId,
@@ -1424,14 +1433,17 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     private void recover(final boolean lastExitOK) {
+        //获得最大的物理便宜消费队列
         long maxPhyOffsetOfConsumeQueue = this.recoverConsumeQueue();
 
         if (lastExitOK) {
+            //正常恢复
             this.commitLog.recoverNormally(maxPhyOffsetOfConsumeQueue);
         } else {
+            //异常恢复
             this.commitLog.recoverAbnormally(maxPhyOffsetOfConsumeQueue);
         }
-
+        //在CommitLog中保存每个消息消费队列当前的存储逻辑偏移量
         this.recoverTopicQueueTable();
     }
 
@@ -1470,7 +1482,9 @@ public class DefaultMessageStore implements MessageStore {
 
     public void recoverTopicQueueTable() {
         HashMap<String/* topic-queueid */, Long/* offset */> table = new HashMap<String, Long>(1024);
+        //CommitLog最小偏移量
         long minPhyOffset = this.commitLog.getMinOffset();
+        //遍历消费队列,将消费队列保存在CommitLog中
         for (ConcurrentMap<Integer, ConsumeQueue> maps : this.consumeQueueTable.values()) {
             for (ConsumeQueue logic : maps.values()) {
                 String key = logic.getTopic() + "-" + logic.getQueueId();
@@ -1521,7 +1535,9 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     public void putMessagePositionInfo(DispatchRequest dispatchRequest) {
+        //获得消费队列
         ConsumeQueue cq = this.findConsumeQueue(dispatchRequest.getTopic(), dispatchRequest.getQueueId());
+        //消费队列分发消息
         cq.putMessagePositionInfoWrapper(dispatchRequest);
     }
 
